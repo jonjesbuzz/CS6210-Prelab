@@ -56,9 +56,11 @@ int main(int argc, char **argv) {
 
   printf("Producer thread started with thread id %lu\n", producer_thread);
 
-  result = pthread_detach(producer_thread);
-  if (0 != result)
-    fprintf(stderr, "Failed to detach producer thread: %s\n", strerror(result));
+  // ! Can't join a detached thread...
+
+  // result = pthread_detach(producer_thread);
+  // if (0 != result)
+  //   fprintf(stderr, "Failed to detach producer thread: %s\n", strerror(result));
 
   result = pthread_create(&consumer_thread, NULL, consumer_routine, &queue);
   if (0 != result) {
@@ -79,8 +81,8 @@ int main(int argc, char **argv) {
     fprintf(stderr, "Failed to join consumer thread: %s\n", strerror(result));
     pthread_exit(NULL);
   }
-  printf("\nPrinted %lu characters.\n", *(long*)thread_return);
-  free(thread_return);
+  // ! Don't dereference the return value, because it's not a ptr to an obj
+  printf("\nPrinted %lu characters.\n", (long)thread_return);
 
   pthread_mutex_destroy(&queue.lock);
   pthread_mutex_destroy(&g_num_prod_lock);
@@ -98,15 +100,17 @@ void *producer_routine(void *arg) {
   int result = 0;
   char c;
 
-  result = pthread_create(&consumer_thread, NULL, consumer_routine, queue_p);
-  if (0 != result) {
-    fprintf(stderr, "Failed to create consumer thread: %s\n", strerror(result));
-    exit(1);
-  }
+// ! Producer should not spawn the consumer thread as well...
 
-  result = pthread_detach(consumer_thread);
-  if (0 != result)
-    fprintf(stderr, "Failed to detach consumer thread: %s\n", strerror(result));
+  // result = pthread_create(&consumer_thread, NULL, consumer_routine, queue_p);
+  // if (0 != result) {
+  //   fprintf(stderr, "Failed to create consumer thread: %s\n", strerror(result));
+  //   exit(1);
+  // }
+  //
+  // result = pthread_detach(consumer_thread);
+  // if (0 != result)
+  //   fprintf(stderr, "Failed to detach consumer thread: %s\n", strerror(result));
 
   for (c = 'a'; c <= 'z'; ++c) {
 
@@ -136,7 +140,9 @@ void *producer_routine(void *arg) {
   }
 
   /* Decrement the number of producer threads running, then return */
+  pthread_mutex_lock(&g_num_prod_lock); // ! NEED TO LOCK THE VALUE BEFORE CHANGE
   --g_num_prod;
+  pthread_mutex_unlock(&g_num_prod_lock);
   return (void*) 0;
 }
 
@@ -179,6 +185,9 @@ void *consumer_routine(void *arg) {
       pthread_mutex_unlock(&queue_p->lock);
       sched_yield();
     }
+    // ! Lock for the next iteration
+    pthread_mutex_lock(&queue_p->lock);
+    pthread_mutex_lock(&g_num_prod_lock);
   }
   pthread_mutex_unlock(&g_num_prod_lock);
   pthread_mutex_unlock(&queue_p->lock);

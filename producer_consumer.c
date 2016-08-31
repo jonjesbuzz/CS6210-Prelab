@@ -42,6 +42,9 @@ int main(int argc, char **argv) {
   printf("Main thread started with thread id %lu\n", pthread_self());
 
   memset(&queue, 0, sizeof(queue));
+
+  // ! Initialize g_num_prod_lock too!
+  pthread_mutex_init(&g_num_prod_lock, NULL);
   pthread_mutex_init(&queue.lock, NULL);
 
   g_num_prod = 1; /* there will be 1 producer thread */
@@ -100,17 +103,15 @@ void *producer_routine(void *arg) {
   int result = 0;
   char c;
 
-// ! Producer should not spawn the consumer thread as well...
+  result = pthread_create(&consumer_thread, NULL, consumer_routine, queue_p);
+  if (0 != result) {
+    fprintf(stderr, "Failed to create consumer thread: %s\n", strerror(result));
+    exit(1);
+  }
 
-  // result = pthread_create(&consumer_thread, NULL, consumer_routine, queue_p);
-  // if (0 != result) {
-  //   fprintf(stderr, "Failed to create consumer thread: %s\n", strerror(result));
-  //   exit(1);
-  // }
-  //
-  // result = pthread_detach(consumer_thread);
-  // if (0 != result)
-  //   fprintf(stderr, "Failed to detach consumer thread: %s\n", strerror(result));
+  result = pthread_detach(consumer_thread);
+  if (0 != result)
+    fprintf(stderr, "Failed to detach consumer thread: %s\n", strerror(result));
 
   for (c = 'a'; c <= 'z'; ++c) {
 
